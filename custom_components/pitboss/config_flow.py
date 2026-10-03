@@ -11,7 +11,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import (
     CONF_DEVICE_ID,
@@ -31,6 +31,7 @@ from .const import (
     DOMAIN,
     LOGGER,
     PROTOCOL_LOCAL,
+    RELOAD_OPTIONS,
 )
 
 VALIDATION_TIMEOUT = 10.0
@@ -308,7 +309,7 @@ class PitBossFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
 
-class PitBossOptionsFlow(OptionsFlow):
+class PitBossOptionsFlow(OptionsFlowWithReload):
     """Options for PitBoss.
 
     The first options flow in this integration, added because remote start
@@ -323,6 +324,13 @@ class PitBossOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            # Reload only for an option that is fixed at setup; the rest are
+            # read live, and a reload on Bluetooth waits for the grill to
+            # advertise again.
+            self.automatic_reload = any(
+                user_input.get(key) != self.config_entry.options.get(key)
+                for key in RELOAD_OPTIONS
+            )
             return self.async_create_entry(title="", data=user_input)
         return self.async_show_form(
             step_id="init",

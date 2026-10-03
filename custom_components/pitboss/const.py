@@ -72,3 +72,18 @@ straight back would appear to snap to the previous setting."""
 
 # Remote start is off unless the user turns it on in the integration options.
 CONF_ENABLE_REMOTE_START = "enable_remote_start"
+
+RELOAD_OPTIONS: frozenset[str] = frozenset()
+"""Options whose change requires reloading the entry.
+
+Empty because every option that exists today -- the remote-start toggle --
+is read live where it is used. An option that fixes something at entity
+registration (a display unit, a polling interval baked into the
+coordinator) belongs in this set when it is added.
+
+The set exists because reloading unconditionally has a real cost: on
+Bluetooth a reload waits for the grill to advertise again, so flipping a
+toggle while the grill was asleep took the whole integration down --
+entities and all -- until the grill next woke up. The options flow reloads
+only when one of these changes.
+"""

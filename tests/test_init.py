@@ -207,6 +207,17 @@ async def test_connect_ble_timeout_raises_not_ready(
     assert entry.state is ConfigEntryState.SETUP_RETRY
 
 
+async def _save_options(
+    hass: HomeAssistant, entry: MockConfigEntry, options: dict[str, bool]
+) -> None:
+    """Save options the way a user does, through the options flow."""
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input=options
+    )
+    await hass.async_block_till_done()
+
+
 async def test_changing_a_live_option_does_not_reload_the_entry(
     hass: HomeAssistant,
     mock_add_config_entry: Callable[[], Awaitable[MockConfigEntry]],
@@ -220,13 +231,44 @@ async def test_changing_a_live_option_does_not_reload_the_entry(
     entry = await mock_add_config_entry()
     coordinator_before = hass.data[DOMAIN][entry.entry_id]
 
-    hass.config_entries.async_update_entry(
-        entry, options={CONF_ENABLE_REMOTE_START: True}
-    )
-    await hass.async_block_till_done()
+    await _save_options(hass, entry, {CONF_ENABLE_REMOTE_START: True})
 
+    assert entry.options == {CONF_ENABLE_REMOTE_START: True}
     assert entry.state is ConfigEntryState.LOADED
     assert hass.data[DOMAIN][entry.entry_id] is coordinator_before
+
+
+async def test_changing_a_reload_option_reloads_the_entry(
+    hass: HomeAssistant,
+    mock_add_config_entry: Callable[[], Awaitable[MockConfigEntry]],
+) -> None:
+    """An option named in RELOAD_OPTIONS still gets its reload."""
+    entry = await mock_add_config_entry()
+    coordinator_before = hass.data[DOMAIN][entry.entry_id]
+
+    with patch(
+        "custom_components.pitboss.config_flow.RELOAD_OPTIONS",
+        frozenset({CONF_ENABLE_REMOTE_START}),
+    ):
+        await _save_options(hass, entry, {CONF_ENABLE_REMOTE_START: True})
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.data[DOMAIN][entry.entry_id] is not coordinator_before
+
+
+async def test_setup_registers_no_update_listener(
+    hass: HomeAssistant,
+    mock_add_config_entry: Callable[[], Awaitable[MockConfigEntry]],
+) -> None:
+    """Reauth and reconfigure reload the entry themselves.
+
+    Home Assistant refuses an update listener alongside
+    `async_update_reload_and_abort` from 2026.12, because the two reload
+    the entry twice.
+    """
+    entry = await mock_add_config_entry()
+
+    assert not entry.update_listeners
 
 
 async def test_unload_entry_stops_api(
