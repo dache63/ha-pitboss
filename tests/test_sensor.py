@@ -195,13 +195,15 @@ async def test_firmware_version_sensor(
 ) -> None:
     """Read once at setup, and reported on the device too."""
     mock_pitboss.get_firmware_version.return_value = {"firmwareVersion": "0.5.7"}
-    await mock_add_config_entry()
+    entry = await mock_add_config_entry()
 
     state = hass.states.get("sensor.mygrill_firmware_version")
     assert state is not None
     assert state.state == "0.5.7"
 
-    device = dr.async_get(hass).async_get_device({(DOMAIN, "mygrill")})
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, "mygrill"), entry.entry_id
+    )
     assert device is not None
     assert device.sw_version == "0.5.7"
 
@@ -305,6 +307,7 @@ async def test_a_late_firmware_read_reaches_the_device_page(
     hass: HomeAssistant,
     mock_add_config_entry: Callable[[], Awaitable[MockConfigEntry]],
     mock_pitboss: Mock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The retry populated the sensor but not the device registry.
 
@@ -316,7 +319,9 @@ async def test_a_late_firmware_read_reaches_the_device_page(
     entry = await mock_add_config_entry()
 
     registry = dr.async_get(hass)
-    device = registry.async_get_device(identifiers={(DOMAIN, "mygrill")})
+    device = registry.async_get_device_by_identifier(
+        (DOMAIN, "mygrill"), entry.entry_id
+    )
     assert device is not None
     assert device.sw_version is None
 
@@ -330,9 +335,14 @@ async def test_a_late_firmware_read_reaches_the_device_page(
     )
     await hass.async_block_till_done()
 
-    device = registry.async_get_device(identifiers={(DOMAIN, "mygrill")})
+    device = registry.async_get_device_by_identifier(
+        (DOMAIN, "mygrill"), entry.entry_id
+    )
     assert device is not None
     assert device.sw_version == "0.5.7"
+    # The lookup is scoped to the entry: the unscoped one is deprecated and
+    # stops working in Home Assistant 2027.8.
+    assert "device_registry.async_get_device`" not in caplog.text
 
 
 @pytest.mark.parametrize("model", ["PBV4PS2"])

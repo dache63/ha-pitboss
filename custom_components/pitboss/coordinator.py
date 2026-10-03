@@ -466,11 +466,15 @@ class PitBossDataUpdateCoordinator(DataUpdateCoordinator[StateDict]):
         """
         self.device_info["sw_version"] = self.firmware_version
         registry = dr.async_get(self.hass)
-        device = registry.async_get_device(
-            identifiers=self.device_info.get("identifiers", set())
-        )
-        if device is not None:
-            registry.async_update_device(device.id, sw_version=self.firmware_version)
+        for identifier in self.device_info.get("identifiers", set()):
+            device = registry.async_get_device_by_identifier(
+                identifier, self.config_entry.entry_id
+            )
+            if device is not None:
+                registry.async_update_device(
+                    device.id, sw_version=self.firmware_version
+                )
+                return
 
     def _merge_state(self, state: StateDict) -> StateDict:
         """Fold a state frame onto the last known one.
